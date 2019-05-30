@@ -184,7 +184,7 @@ class APIController {
             return
         }
         
-        let animalURL = baseUrl.appendingPathComponent("animal/\(animalName)") //this is how url should be based on API document
+        let animalURL = baseUrl.appendingPathComponent("animals/\(animalName)") //this is how url should be based on API document
         
         var request = URLRequest(url: animalURL)  //we use this here even though this is GET because haedervalue is required to "GET"
         request.httpMethod = HTTPMethod.get.rawValue
