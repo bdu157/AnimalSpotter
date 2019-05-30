@@ -14,15 +14,164 @@ enum HTTPMethod: String {
     case post = "POST"
 }
 
+
+enum NetworkError: Error {
+    case noAuth
+    case badAuth
+    case otherError
+    case badData
+    case noDecode
+}
+
+
+
+
 class APIController {
     
     private let baseUrl = URL(string: "https://lambdaanimalspotter.vapor.cloud/api")!
     
-    // create function for sign up
+    var bearer: Bearer?
     
-    // create function for sign in
+    // create function for sign up  POST - we need URLRequest so we specify that we are posting if it is GET then we do not need it
+    func signUp(with user: User, completion: @escaping (Error?) -> ()) {
+        //Create endpoint URL
+        let signUpURL = baseUrl.appendingPathComponent("users/signup")
+        
+        //Set up request - this would not be needed if it is GET because default is GET
+        var request = URLRequest(url: signUpURL)
+        request.httpMethod = HTTPMethod.post.rawValue   //giving this POST because required method is POST
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type") //content type of file is json - this is setting what kind of data this is going to be
+        
+        //initialize JSON Encoder
+        let jsonEncoder = JSONEncoder()
+        
+        
+        // Encode the data, catch errors
+        do {
+            let jsonData = try jsonEncoder.encode(user)  //user object which has username and password
+            request.httpBody = jsonData
+        } catch {
+            NSLog("Error encoding user object: \(error)")
+            completion(error)
+            return
+        }
+        //by posting signUp we arent getting any data back so we set it as underscore
+        //Create Data Task, handle bad response and errors
+        URLSession.shared.dataTask(with: request) { (_, response, error) in   //when you use request, this is when GET/POST/PUT/DELETE is required. if you are just doing GET you do not need to create URLrequest because default value of this is GET
+            if let response = response as? HTTPURLResponse,
+                response.statusCode != 200 {
+                completion(NSError(domain: "", code: response.statusCode, userInfo: nil))
+                return
+            }
+            
+            if let error = error {
+                completion(error)
+                return
+            }
+            completion(nil)     //from Error within closure
+        }.resume()
+    }
     
-    // create function for fetching all animal names
+    // create function for sign in POST
+    func signIn(with user: User, completion:@escaping (Error?) -> ()) {
+        let loginURL = baseUrl.appendingPathComponent("users/login")
+        
+        var request = URLRequest(url: loginURL)
+        request.httpMethod = HTTPMethod.post.rawValue
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let jsonEncoder = JSONEncoder()
+        
+        do {
+            let jsonData = try jsonEncoder.encode(user)
+            request.httpBody = jsonData  //for post or put
+        } catch {
+            NSLog("Error encoding user object: \(error)")
+            completion(error)
+            return
+        }
+        
+        URLSession.shared.dataTask(with: request) { (data, response, error) in  //we want to handle the data here because we are getting token back
+            if let response = response as? HTTPURLResponse,
+                response.statusCode != 200 {
+                completion(NSError(domain: "", code: response.statusCode, userInfo: nil))
+                return
+            }
+            
+            if let error = error {
+                completion(error)
+                return
+            }
+            
+            // we are setting this because token being downloaded as data for us to store
+            guard let data = data else {
+                completion(NSError())
+                return
+            }
+            
+            //we are decoding here because we are getting data (token) so it can be stored into Bearer object as token String
+            
+            let decoder = JSONDecoder()
+            
+            do {
+                self.bearer = try decoder.decode(Bearer.self, from: data)   //same format as our Bearer object so no need to change anything
+                
+            } catch {
+                NSLog("Error decoding bearer object: \(error)")
+                completion(error)
+                return
+            }
+            completion(nil)
+        }.resume()
+    }
     
-    // create function to fetch image
+    // create function for fetching all animal names GET
+    // authentication is required to get these datas
+    func fetchAllAnimalNames(completion:@escaping (Result<[String], NetworkError>)->Void) {
+        guard let bearer = self.bearer else {
+            completion(.failure(.noAuth))   //if bearer does not exist then it cannot even be judged whether it is bad or good
+            return
+        }
+        
+        let allAnimalsURL = baseUrl.appendingPathComponent("animals/all")
+        
+        //we are using URLRequest even though it is GET becaue we need to pass required headervalue accodring to API document
+        var request = URLRequest(url: allAnimalsURL)
+        request.httpMethod = HTTPMethod.get.rawValue
+        request.addValue("Bearer \(bearer.token)", forHTTPHeaderField: "Authorization")  //creating headerValue Authorization being key and bearer.token being value
+        
+        URLSession.shared.dataTask(with: request) { (data, response, error) in
+            if let response = response as? HTTPURLResponse,
+                response.statusCode == 401 {
+                completion(.failure(.badAuth)) //unauthorized access
+                return
+            }
+            
+            if let _ = error {   //undersocre was used here because it is not going to be used within {}
+                completion(.failure(.otherError)) //if there is an error it would be "other error"
+                return
+            }
+            
+            guard let data = data else { //if data does not exist and baddata
+                completion(.failure(.badData))
+                return
+            }
+            
+            // we are decoding it because we are getting datas from here
+            let decoder = JSONDecoder()
+            
+            do {
+                let animalNames = try decoder.decode([String].self, from: data)
+                completion(.success(animalNames)) //.success([String]) becuase of closue set up (Result<[String], NetworkError>)->Void
+            } catch {
+                NSLog("Error decoding animal objects: \(error)")
+                completion(.failure(.noDecode))   //in case there is no decoding happening it shows noDecode error
+                return
+            }
+        }.resume()
+    }
+    
+    // create function to fetch details of animal GET
+    
+    // create function to fetch image GET
 }
