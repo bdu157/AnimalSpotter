@@ -162,6 +162,11 @@ class APIController {
             
             do {
                 let animalNames = try decoder.decode([String].self, from: data)
+                
+//               [ "Lion",
+//                "Zebra",
+//                "Flamingo"]
+                
                 completion(.success(animalNames)) //.success([String]) becuase of closue set up (Result<[String], NetworkError>)->Void
             } catch {
                 NSLog("Error decoding animal objects: \(error)")
@@ -172,6 +177,80 @@ class APIController {
     }
     
     // create function to fetch details of animal GET
+    // we also get response (such as 200, 400). getting data is getting actual datas not just response
+    func fetchDetailsForAnimal(for animalName: String, completion: @escaping (Result<Animal, NetworkError>)->Void) {
+        guard let bearer = self.bearer else {
+            completion(.failure(.noAuth))
+            return
+        }
+        
+        let animalURL = baseUrl.appendingPathComponent("animal/\(animalName)") //this is how url should be based on API document
+        
+        var request = URLRequest(url: animalURL)  //we use this here even though this is GET because haedervalue is required to "GET"
+        request.httpMethod = HTTPMethod.get.rawValue
+        request.addValue("Bearer \(bearer.token)", forHTTPHeaderField: "Authorization")  //Bearer \(bearer.token) is what the value shoud be
+
+        URLSession.shared.dataTask(with: request) { (data, response, error) in
+            if let response = response as? HTTPURLResponse,
+                response.statusCode == 401 {
+                completion(.failure(.noAuth))
+                return
+            }
+            
+            if let _ = error {
+                completion(.failure(.otherError))
+                return
+            }
+            
+            guard let data = data else {
+                completion(.failure(.badData))
+                return
+            }
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .secondsSince1970  //this will make random non sense number into actual date
+            
+            do {
+                let animal = try decoder.decode(Animal.self, from: data)  //Animal.self is fine because same format as object we have
+                completion(.success(animal)) // animal is String which makes sense with Result<String, NetworkError>
+               /*
+                {
+                    "id": 1,
+                    "name": "Lion",
+                    "latitude": 41.0059666,
+                    "longitude": -8.596247,
+                    "timeSeen": 1476381432,
+                    "description": "A large tawny-colored cat that lives in prides, found in Africa and northwestern India. The male has a flowing shaggy mane and takes little part in hunting, which is done cooperatively by the females.",
+                }
+            */
+            } catch {
+                NSLog("Error decoding animal object: \(error)")
+                completion(.failure(.noDecode))
+                return
+            }
+        }.resume()
+    }
     
     // create function to fetch image GET
+    //"imageURL": "https://user-images.githubusercontent.com/16965587/57208108-357e8000-6f8f-11e9-89fa-acd05e383c63.jpg"
+    func fetchImage(at urlString: String, completion: @escaping (Result<UIImage, NetworkError>)->Void) {
+        let imageURL = URL(string: urlString)!
+        
+        var request = URLRequest(url: imageURL)
+        request.httpMethod = HTTPMethod.get.rawValue
+        
+        URLSession.shared.dataTask(with: request) { (data, _, error) in
+            if let _ = error {
+                completion(.failure(.otherError))
+                return
+            }
+            
+            guard let data = data else {
+                completion(.failure(.badData))
+                return
+            }
+            
+            let image = UIImage(data: data)! //for the images no decoding needed because it comes in as an image data so you just need to change it to UIImage
+            completion(.success(image))  // Result<UIImage, NetworkError>  here image = UIImage
+        }.resume()
+    }
 }
