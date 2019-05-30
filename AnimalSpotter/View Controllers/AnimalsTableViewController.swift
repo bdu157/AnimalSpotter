@@ -12,14 +12,15 @@ class AnimalsTableViewController: UITableViewController {
     
     private var animalNames: [String] = []
 
-    override func viewDidLoad() {
-        super.viewDidLoad()
-    }
+    var apiController = APIController()
     
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         
         // transition to login view if conditions require
+        if self.apiController.bearer == nil {
+            performSegue(withIdentifier: "LoginViewModalSegue", sender: self)
+        }
     }
 
     // MARK: - Table view data source
@@ -31,7 +32,6 @@ class AnimalsTableViewController: UITableViewController {
     override func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         let cell = tableView.dequeueReusableCell(withIdentifier: "AnimalCell", for: indexPath)
 
-        // Configure the cell...
         cell.textLabel?.text = animalNames[indexPath.row]
 
         return cell
@@ -40,6 +40,14 @@ class AnimalsTableViewController: UITableViewController {
     // MARK: - Actions
     @IBAction func getAnimals(_ sender: UIBarButtonItem) {
         // fetch all animals from API
+        self.apiController.fetchAllAnimalNames { (result) in
+            if let names = try? result.get() {
+                DispatchQueue.main.async {
+                    self.animalNames = names
+                    self.tableView.reloadData()
+                }
+            }
+        }
     }
     
     // MARK: - Navigation
@@ -48,9 +56,13 @@ class AnimalsTableViewController: UITableViewController {
     override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
         if segue.identifier == "ShowAnimalDetailSegue" {
             // inject dependencies
+
         }
         else if segue.identifier == "LoginViewModalSegue" {
             // inject dependencies
+            if let loginVC = segue.destination as? LoginViewController {
+                loginVC.apiController = self.apiController
+            }
         }
     }
 }
